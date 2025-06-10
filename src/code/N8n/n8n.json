@@ -1,0 +1,116 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "path": "contagio-city",
+        "method": "POST",
+        "responseMode": "lastNode"
+      },
+      "id": "WebhookTrigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [\n  {\n    json: {\n      population: $json[\"body\"].population_size || 500,\n      infection_rate: $json[\"body\"].infection_rate || 0.1,\n      recovery_rate: $json[\"body\"].recovery_rate || 0.03,\n      vaccination_rate: $json[\"body\"].vaccination_rate || 0.05,\n      steps: $json[\"body\"].simulation_steps || 100\n    }\n  }\n];"
+      },
+      "id": "SetVariables",
+      "name": "Set Variables",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "command": "python3",
+        "arguments": [
+          "/path/to/contagio_city.py",
+          "--population={{$json[\"population\"]}}",
+          "--infection_rate={{$json[\"infection_rate\"]}}",
+          "--recovery_rate={{$json[\"recovery_rate\"]}}",
+          "--vaccination_rate={{$json[\"vaccination_rate\"]}}",
+          "--steps={{$json[\"steps\"]}}"
+        ]
+      },
+      "id": "ExecutePython",
+      "name": "Run Simulation",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "/path/to/results/output.json",
+        "options": {}
+      },
+      "id": "ReadResults",
+      "name": "Read Results",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "propertyName": "data"
+      },
+      "id": "ParseJson",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.binaryDataToJson",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "WebhookTrigger": {
+      "main": [
+        [
+          {
+            "node": "Set Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Variables": {
+      "main": [
+        [
+          {
+            "node": "Run Simulation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Simulation": {
+      "main": [
+        [
+          {
+            "node": "Read Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Results": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "name": "Contagio City Simulation",
+  "tags": []
+}
