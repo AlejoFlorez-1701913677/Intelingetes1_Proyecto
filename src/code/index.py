@@ -21,7 +21,8 @@ class Ciudadano(Agent):
         self.estado = SUSCEPTIBLE
         self.tiempo_infeccion = 0
         self.variante = None
-        self.usa_mascarilla = random.random() < self.model.probabilidad_uso_mascarilla
+        self.usa_mascarilla = False
+        self.vacunado = False
 
     def mover(self):
         if self.estado != MUERTO:
@@ -46,15 +47,28 @@ class Ciudadano(Agent):
                 prob_contagio = self.model.tasa_contagio * factor_mascarilla
 
                 variante = vecino.variante
-                contagio = self.model.variantes[variante]["contagio"]
+                #contagio = self.model.variantes[variante]["contagio"]
                 
-                if random.random() < (prob_contagio + contagio):
+                if random.random() < (prob_contagio):# + contagio):
                     self.estado = INFECTADO
                     self.variante = variante
 
-
+    def vacunar(self):
+        # Vacunación basada en probabilidad
+        if random.random() < self.model.probabilidad_vacunacion and self.estado == SUSCEPTIBLE:
+            self.vacunado = True
+            self.estado = RECUPERADO  # Asumimos que la vacunación previene el contagio
+            
     def step(self):
+        # Vacunación
+        self.vacunar()
         if self.estado == SUSCEPTIBLE:
+             # Asignar mascarilla en cada paso con base en la probabilidad
+            if random.random() < self.model.probabilidad_uso_mascarilla:
+                self.usa_mascarilla = True
+            else:
+                self.usa_mascarilla = False
+            # Contagio
             self.infectar()
         elif self.estado == INFECTADO:
             self.tiempo_infeccion += 1
@@ -73,13 +87,15 @@ class Ciudadano(Agent):
 
 # Modelo
 class EpidemiaModel(Model):
-    def __init__(self, N, width, height, tasa_contagio, duracion_infeccion, probabilidad_uso_mascarilla):
+    def __init__(self, N, width, height, tasa_contagio, duracion_infeccion, probabilidad_uso_mascarilla, mostrar_muertos, probabilidad_vacunacion):
         self.num_agents = N
         self.grid = MultiGrid(width, height, True)
         self.schedule = RandomActivation(self)
         self.tasa_contagio = tasa_contagio
         self.duracion_infeccion = duracion_infeccion
         self.probabilidad_uso_mascarilla = probabilidad_uso_mascarilla
+        self.mostrar_muertos = mostrar_muertos
+        self.probabilidad_vacunacion = probabilidad_vacunacion  # Nueva probabilidad de vacunación
 
         self.variantes = {
             "Original": {"contagio": 0.3, "letalidad": 0.01},
@@ -89,7 +105,7 @@ class EpidemiaModel(Model):
 
         self.variantes_lista = list(self.variantes.keys())
         self.virus_actual = "Original"
-        self.mutacion_ciclo = 30
+        self.mutacion_ciclo = 10
 
         for i in range(self.num_agents):
             a = Ciudadano(i, self)
@@ -107,11 +123,15 @@ class EpidemiaModel(Model):
                 "Infectados": lambda m: self.contar_estado(INFECTADO),
                 "Recuperados": lambda m: self.contar_estado(RECUPERADO),
                 "Mascarilla": lambda m: sum(1 for a in m.schedule.agents if a.usa_mascarilla),
+                "Vacunados": lambda m: sum(1 for a in m.schedule.agents if a.vacunado),
                 "Muertos": lambda m: self.contar_estado(MUERTO),
                 "Variante X": lambda m: sum(1 for a in m.schedule.agents if getattr(a, "variante", None) == "Variante X" and a.estado == INFECTADO),
                 "Variante Y": lambda m: sum(1 for a in m.schedule.agents if getattr(a, "variante", None) == "Variante Y" and a.estado == INFECTADO),
+                "Susceptibles con Mascarilla": lambda m: sum(1 for a in m.schedule.agents if a.estado == SUSCEPTIBLE and a.usa_mascarilla),
+                "Infectados con Mascarilla": lambda m: sum(1 for a in m.schedule.agents if a.estado == INFECTADO and a.usa_mascarilla)
             }
         )
+
 
     def contar_estado(self, estado):
         return sum(1 for a in self.schedule.agents if a.estado == estado)
@@ -129,13 +149,19 @@ class EpidemiaModel(Model):
 # Visualización: Representación por color
 def agent_portrayal(agent):
     if agent.estado == SUSCEPTIBLE:
-        color = "blue"
+        if agent.usa_mascarilla:
+            color = "purple"  # Susceptible con mascarilla
+        else:
+            color = "blue"  # Susceptible sin mascarilla
     elif agent.estado == INFECTADO:
-        color = "red"
+        if agent.usa_mascarilla:
+            color = "orange"  # Infectado con mascarilla
+        else:
+            color = "red"  # Infectado sin mascarilla
     elif agent.estado == RECUPERADO:
-        color = "green"
+        color = "green"  # Recuperado
     elif agent.estado == MUERTO:
-        color = "black"
+        color = "black"  # Muerto
 
     portrayal = {
         "Shape": "circle",
@@ -145,11 +171,13 @@ def agent_portrayal(agent):
         "r": 0.7,
     }
 
+    # Si el agente usa mascarilla, se agrega un borde rosa
     if agent.usa_mascarilla:
         portrayal["stroke_color"] = "pink"
-        portrayal["stroke_width"] = 1
+        portrayal["stroke_width"] = 100  # Grosor del borde de la mascarilla
 
     return portrayal
+
 
 # Configuración visual del grid
 grid = CanvasGrid(agent_portrayal, 50, 50, 500, 500)
@@ -161,6 +189,10 @@ chart = ChartModule(
         {"Label": "Infectados", "Color": "red"},
         {"Label": "Recuperados", "Color": "green"},
         {"Label": "Muertos", "Color": "black"},
+        {"Label": "Mascarilla", "Color": "pink"},
+        {"Label": "Susceptibles con Mascarilla", "Color": "purple"},
+        {"Label": "Infectados con Mascarilla", "Color": "orange"},
+        {"Label": "Vacunados", "Color": "cyan"},
         {"Label": "Variante X", "Color": "orange"},
         {"Label": "Variante Y", "Color": "purple"}
     ],
@@ -179,6 +211,9 @@ server = ModularServer(
         "tasa_contagio": UserSettableParameter("slider", "Tasa de contagio", 5, 0.0, 35, 0.05),
         "duracion_infeccion": UserSettableParameter("slider", "Duración de infección", 10, 1, 50, 1),
         "probabilidad_uso_mascarilla": UserSettableParameter("slider", "Probabilidad de uso de mascarilla", 0.5, 0.0, 1.0, 0.05),
+        "probabilidad_vacunacion": UserSettableParameter("slider", "Probabilidad de vacunación", 0.5, 0.0, 1.0, 0.05),
+        "mostrar_muertos": UserSettableParameter("checkbox", "Mostrar ciudadanos muertos", True),
+
     }
 )
 
