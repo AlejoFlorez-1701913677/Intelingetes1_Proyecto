@@ -67,7 +67,9 @@ class Ciudadano(Agent):
 
             if self.tiempo_infeccion >= self.model.duracion_infeccion:
                 self.estado = RECUPERADO
-        self.mover()
+        
+        if self.estado != MUERTO:
+            self.mover()
 
 # Modelo
 class EpidemiaModel(Model):
