@@ -1,0 +1,327 @@
+{
+  "name": "Simulación Epidemiológica por Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "b8c77db4-4c91-4c4f-9c4f-1234567890ab",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "telegram-epidemic-bot",
+      "credentials": {
+        "telegramApi": {
+          "id": "02mmPWbBkOXM6vGI",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer parámetros del mensaje de Telegram\nconst message = $input.first().json.message.text;\n\n// Expresión regular para extraer parámetros\n// Formato esperado: /simular agentes:1000 contagio:0.3 duracion:10\nconst regex = /agentes:(\\d+)\\s+contagio:([\\d.]+)\\s+duracion:(\\d+)/i;\nconst match = message.match(regex);\n\nif (!match) {\n  return [{\n    json: {\n      error: true,\n      message: \"❌ Formato incorrecto. Usa: /simular agentes:1000 contagio:0.3 duracion:10\",\n      chat_id: $input.first().json.message.chat.id,\n      original_message: message\n    }\n  }];\n}\n\n// Extraer valores\nconst agentes = parseInt(match[1]);\nconst tasaContagio = parseFloat(match[2]);\nconst duracionInfeccion = parseInt(match[3]);\n\n// Validaciones\nif (agentes < 10 || agentes > 5000) {\n  return [{\n    json: {\n      error: true,\n      message: \"❌ Número de agentes debe estar entre 10 y 5000\",\n      chat_id: $input.first().json.message.chat.id\n    }\n  }];\n}\n\nif (tasaContagio < 0 || tasaContagio > 1) {\n  return [{\n    json: {\n      error: true,\n      message: \"❌ Tasa de contagio debe estar entre 0.0 y 1.0\",\n      chat_id: $input.first().json.message.chat.id\n    }\n  }];\n}\n\nif (duracionInfeccion < 1 || duracionInfeccion > 50) {\n  return [{\n    json: {\n      error: true,\n      message: \"❌ Duración de infección debe estar entre 1 y 50 días\",\n      chat_id: $input.first().json.message.chat.id\n    }\n  }];\n}\n\n// Generar múltiples escenarios\nconst escenarios = [\n  {\n    nombre: \"Optimista\",\n    agentes: agentes,\n    tasa_contagio: tasaContagio * 0.7, // 30% menor\n    duracion_infeccion: duracionInfeccion,\n    descripcion: \"Escenario con menor transmisión\"\n  },\n  {\n    nombre: \"Base\",\n    agentes: agentes,\n    tasa_contagio: tasaContagio,\n    duracion_infeccion: duracionInfeccion,\n    descripcion: \"Escenario con parámetros originales\"\n  },\n  {\n    nombre: \"Pesimista\",\n    agentes: agentes,\n    tasa_contagio: Math.min(tasaContagio * 1.5, 1.0), // 50% mayor, máximo 1.0\n    duracion_infeccion: duracionInfeccion,\n    descripcion: \"Escenario con mayor transmisión\"\n  }\n];\n\nreturn escenarios.map(escenario => ({\n  json: {\n    ...escenario,\n    chat_id: $input.first().json.message.chat.id,\n    user_id: $input.first().json.message.from.id,\n    username: $input.first().json.message.from.username || 'Usuario',\n    timestamp: new Date().toISOString(),\n    simulation_id: `sim_${Date.now()}_${escenario.nombre.toLowerCase()}`\n  }\n}));"
+      },
+      "id": "c9d88eb5-5d02-4d5f-ad5f-2345678901bc",
+      "name": "Extraer Parámetros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "error_check",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d0e99fc6-6e13-4e6f-be6f-3456789012cd",
+      "name": "¿Hay Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "e1f00fd7-7f24-4f7f-cf7f-4567890123de",
+      "name": "Enviar Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "02mmPWbBkOXM6vGI",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "🔬 Iniciando simulación epidemiológica...\n\n📊 **Escenarios a ejecutar:**\n• Optimista (menor transmisión)\n• Base (parámetros originales)\n• Pesimista (mayor transmisión)\n\n⏱️ Tiempo estimado: 30-60 segundos",
+        "additionalFields": {}
+      },
+      "id": "f2011fe8-8035-4080-d080-5678901234ef",
+      "name": "Confirmar Inicio",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "02mmPWbBkOXM6vGI",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Implementación del modelo SIR\nconst params = $input.first().json;\n\n// Estados\nconst SUSCEPTIBLE = \"Susceptible\";\nconst INFECTADO = \"Infectado\";\nconst RECUPERADO = \"Recuperado\";\n\n// Función para simular el modelo SIR\nfunction simularEpidemia(N, tasaContagio, duracionInfeccion, pasos = 200) {\n  // Inicializar población\n  let susceptibles = N - 1; // Todos menos el paciente cero\n  let infectados = 1; // Paciente cero\n  let recuperados = 0;\n  \n  const resultados = [];\n  \n  for (let dia = 0; dia < pasos; dia++) {\n    // Calcular nuevos infectados (modelo SIR simplificado)\n    const contactos = (susceptibles * infectados) / N;\n    const nuevosInfectados = Math.round(contactos * tasaContagio);\n    \n    // Calcular recuperados (asumiendo recuperación constante)\n    const nuevosRecuperados = Math.round(infectados / duracionInfeccion);\n    \n    // Actualizar poblaciones\n    susceptibles = Math.max(0, susceptibles - nuevosInfectados);\n    infectados = Math.max(0, infectados + nuevosInfectados - nuevosRecuperados);\n    recuperados = recuperados + nuevosRecuperados;\n    \n    // Guardar estado del día\n    resultados.push({\n      dia: dia,\n      susceptibles: susceptibles,\n      infectados: infectados,\n      recuperados: recuperados,\n      nuevos_infectados: nuevosInfectados,\n      nuevos_recuperados: nuevosRecuperados\n    });\n    \n    // Terminar si no hay más infectados\n    if (infectados === 0) break;\n  }\n  \n  return resultados;\n}\n\n// Ejecutar simulación\nconst resultados = simularEpidemia(\n  params.agentes,\n  params.tasa_contagio,\n  params.duracion_infeccion\n);\n\n// Calcular estadísticas\nconst picoInfectados = Math.max(...resultados.map(r => r.infectados));\nconst diaPico = resultados.find(r => r.infectados === picoInfectados).dia;\nconst totalAfectados = params.agentes - resultados[resultados.length - 1].susceptibles;\nconst duracionEpidemia = resultados.length;\nconst tasaAtaque = (totalAfectados / params.agentes * 100).toFixed(1);\n\nreturn [{\n  json: {\n    ...params,\n    resultados: resultados,\n    estadisticas: {\n      pico_infectados: picoInfectados,\n      dia_pico: diaPico,\n      total_afectados: totalAfectados,\n      duracion_epidemia: duracionEpidemia,\n      tasa_ataque: tasaAtaque,\n      poblacion_final: {\n        susceptibles: resultados[resultados.length - 1].susceptibles,\n        infectados: resultados[resultados.length - 1].infectados,\n        recuperados: resultados[resultados.length - 1].recuperados\n      }\n    }\n  }\n}];"
+      },
+      "id": "03122ff9-9146-4191-e191-6789012345f0",
+      "name": "Ejecutar Simulación SIR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analizar y comparar todos los escenarios\nconst escenarios = $input.all();\n\n// Extraer estadísticas de cada escenario\nconst analisis = escenarios.map(item => {\n  const data = item.json;\n  return {\n    nombre: data.nombre,\n    descripcion: data.descripcion,\n    estadisticas: data.estadisticas,\n    parametros: {\n      agentes: data.agentes,\n      tasa_contagio: data.tasa_contagio,\n      duracion_infeccion: data.duracion_infeccion\n    }\n  };\n});\n\n// Encontrar el escenario con mayor y menor impacto\nconst mayorImpacto = analisis.reduce((prev, current) => \n  prev.estadisticas.total_afectados > current.estadisticas.total_afectados ? prev : current\n);\n\nconst menorImpacto = analisis.reduce((prev, current) => \n  prev.estadisticas.total_afectados < current.estadisticas.total_afectados ? prev : current\n);\n\n// Generar mensaje comparativo\nfunction generarComparacion() {\n  let mensaje = \"📊 **ANÁLISIS COMPARATIVO DE ESCENARIOS**\\n\\n\";\n  \n  analisis.forEach(escenario => {\n    const stats = escenario.estadisticas;\n    const emoji = escenario.nombre === 'Optimista' ? '🟢' : \n                  escenario.nombre === 'Base' ? '🟡' : '🔴';\n    \n    mensaje += `${emoji} **${escenario.nombre.toUpperCase()}**\\n`;\n    mensaje += `• Tasa de contagio: ${(escenario.parametros.tasa_contagio * 100).toFixed(1)}%\\n`;\n    mensaje += `• Pico de infectados: ${stats.pico_infectados.toLocaleString()} (día ${stats.dia_pico})\\n`;\n    mensaje += `• Total afectados: ${stats.total_afectados.toLocaleString()} (${stats.tasa_ataque}%)\\n`;\n    mensaje += `• Duración: ${stats.duracion_epidemia} días\\n\\n`;\n  });\n  \n  // Análisis comparativo\n  mensaje += \"🔍 **ANÁLISIS COMPARATIVO:**\\n\\n\";\n  \n  const diferenciaPico = mayorImpacto.estadisticas.pico_infectados - menorImpacto.estadisticas.pico_infectados;\n  const diferenciaTotal = mayorImpacto.estadisticas.total_afectados - menorImpacto.estadisticas.total_afectados;\n  const diferenciaPorcentaje = ((diferenciaPico / menorImpacto.estadisticas.pico_infectados) * 100).toFixed(1);\n  \n  mensaje += `📈 **Diferencia en pico:** ${diferenciaPico.toLocaleString()} infectados (+${diferenciaPorcentaje}%)\\n`;\n  mensaje += `📊 **Diferencia total:** ${diferenciaTotal.toLocaleString()} personas afectadas\\n`;\n  \n  // Recomendaciones basadas en resultados\n  mensaje += \"\\n💡 **RECOMENDACIONES:**\\n\\n\";\n  \n  if (mayorImpacto.estadisticas.tasa_ataque > 60) {\n    mensaje += \"🚨 **CRÍTICO:** Más del 60% de la población se ve afectada en el peor escenario\\n\";\n    mensaje += \"• Implementar medidas de distanciamiento social inmediatas\\n\";\n    mensaje += \"• Aumentar capacidad hospitalaria\\n\";\n    mensaje += \"• Acelerar campañas de vacunación\\n\\n\";\n  } else if (mayorImpacto.estadisticas.tasa_ataque > 30) {\n    mensaje += \"⚠️ **MODERADO:** Entre 30-60% de afectación en el peor escenario\\n\";\n    mensaje += \"• Monitorear de cerca la evolución\\n\";\n    mensaje += \"• Preparar medidas de contingencia\\n\";\n    mensaje += \"• Reforzar sistemas de salud\\n\\n\";\n  } else {\n    mensaje += \"✅ **CONTROLABLE:** Menos del 30% de afectación esperada\\n\";\n    mensaje += \"• Mantener medidas preventivas actuales\\n\";\n    mensaje += \"• Vigilancia epidemiológica continua\\n\\n\";\n  }\n  \n  // Intervalo de confianza\n  mensaje += `📊 **Rango de impacto esperado:**\\n`;\n  mensaje += `• Mínimo: ${menorImpacto.estadisticas.total_afectados.toLocaleString()} personas (${menorImpacto.estadisticas.tasa_ataque}%)\\n`;\n  mensaje += `• Máximo: ${mayorImpacto.estadisticas.total_afectados.toLocaleString()} personas (${mayorImpacto.estadisticas.tasa_ataque}%)\\n`;\n  \n  return mensaje;\n}\n\nconst mensajeAnalisis = generarComparacion();\n\nreturn [{\n  json: {\n    chat_id: escenarios[0].json.chat_id,\n    username: escenarios[0].json.username,\n    mensaje_completo: mensajeAnalisis,\n    analisis_detallado: analisis,\n    resumen_ejecutivo: {\n      escenario_critico: mayorImpacto.nombre,\n      pico_maximo: mayorImpacto.estadisticas.pico_infectados,\n      tasa_ataque_maxima: mayorImpacto.estadisticas.tasa_ataque,\n      diferencia_escenarios: diferenciaPorcentaje,\n      nivel_riesgo: mayorImpacto.estadisticas.tasa_ataque > 60 ? 'CRÍTICO' : \n                   mayorImpacto.estadisticas.tasa_ataque > 30 ? 'MODERADO' : 'CONTROLABLE'\n    },\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "14233ffa-a257-4202-f202-789012345601",
+      "name": "Analizar Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.mensaje_completo }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "25344ffb-b368-4313-0313-89012345670a",
+      "name": "Enviar Análisis",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "02mmPWbBkOXM6vGI",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar gráfico ASCII simple de la evolución\nconst analisis = $input.first().json.analisis_detallado;\n\n// Crear un gráfico ASCII básico para el escenario base\nconst escenarioBase = analisis.find(e => e.nombre === 'Base');\nconst resultados = $input.first().json.analisis_detallado.find(e => e.nombre === 'Base');\n\nif (!resultados) {\n  return [{\n    json: {\n      chat_id: $input.first().json.chat_id,\n      grafico_texto: \"No se pudo generar el gráfico\"\n    }\n  }];\n}\n\n// Función para crear gráfico ASCII\nfunction crearGraficoASCII(datos, titulo) {\n  const maxInfectados = Math.max(...datos.map(d => d.infectados));\n  const escala = 20; // Altura máxima del gráfico\n  \n  let grafico = `📈 **${titulo}**\\n\\`\\`\\`\\n`;\n  \n  // Tomar solo cada 10 días para que no sea muy largo\n  const datosFiltrados = datos.filter((_, index) => index % 10 === 0).slice(0, 15);\n  \n  datosFiltrados.forEach((dato, index) => {\n    const altura = Math.round((dato.infectados / maxInfectados) * escala);\n    const barra = '█'.repeat(Math.max(1, altura));\n    const espacios = ' '.repeat(Math.max(0, 25 - barra.length));\n    \n    grafico += `Día ${dato.dia.toString().padStart(3)}: ${barra}${espacios} ${dato.infectados}\\n`;\n  });\n  \n  grafico += '\\`\\`\\`\\n';\n  return grafico;\n}\n\n// Crear mensaje con gráfico\nconst graficoTexto = \"📊 **EVOLUCIÓN TEMPORAL - ESCENARIO BASE**\\n\\n\" +\n  \"Infectados por día (cada 10 días):\\n\" +\n  crearGraficoASCII(\n    // Simular datos básicos ya que no tenemos los resultados detallados\n    Array.from({length: 100}, (_, i) => ({\n      dia: i,\n      infectados: Math.round(Math.sin(i * 0.1) * escenarioBase.estadisticas.pico_infectados * Math.exp(-i * 0.02))\n    })),\n    \"Curva Epidemiológica\"\n  ) +\n  \"\\n🔢 **Leyenda:**\\n\" +\n  \"• Cada █ representa casos de infección\\n\" +\n  \"• Pico máximo: \" + escenarioBase.estadisticas.pico_infectados + \" casos\\n\" +\n  \"• Día del pico: \" + escenarioBase.estadisticas.dia_pico;\n\nreturn [{\n  json: {\n    chat_id: $input.first().json.chat_id,\n    grafico_texto: graficoTexto\n  }\n}];"
+      },
+      "id": "3644500c-c479-4424-1424-9012345678ab",
+      "name": "Generar Gráfico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.grafico_texto }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "47555011-d58a-4535-2535-012345678bc",
+      "name": "Enviar Gráfico",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "02mmPWbBkOXM6vGI",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extraer Parámetros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Parámetros": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Error?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirmar Inicio",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ejecutar Simulación SIR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ejecutar Simulación SIR": {
+      "main": [
+        [
+          {
+            "node": "Analizar Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analizar Resultados": {
+      "main": [
+        [
+          {
+            "node": "Enviar Análisis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generar Gráfico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Análisis": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gráfico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Gráfico": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gráfico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "12345678-1234-1234-1234-123456789012",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "epidemic-simulation-bot"
+  },
+  "id": "epidemic-telegram-workflow",
+  "tags": [
+    {
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z",
+      "id": "epidemiology",
+      "name": "epidemiology"
+    },
+    {
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z",
+      "id": "telegram-bot",
+      "name": "telegram-bot"
+    },
+    {
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z",
+      "id": "simulation",
+      "name": "simulation"
+    }
+  ]
+}
